@@ -131,7 +131,7 @@ class KnowledgeBase:
             r for r in results[1:] if r.score >= best.score * config.RELATED_SCORE_RATIO
         ]
         if len(sources) > 1:
-            notes.append("More than one section looks relevant; see all sources below.")
+            notes.append("More than one section looks relevant, so all of them are listed as sources.")
 
         return Answer(
             question,
