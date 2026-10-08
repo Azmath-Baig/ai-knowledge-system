@@ -66,6 +66,13 @@ def test_unknown_words_reports_original_words(retriever):
     assert retriever.unknown_words("How many days of annual leave?") == []
 
 
+def test_conversational_filler_is_not_treated_as_a_topic(retriever):
+    # Found by manual testing: "like" was reported as a word the knowledge base lacks.
+    question = "and like if i don't take my annual leave will i get money?"
+    assert "like" not in retriever.content_words(question)
+    assert retriever.unknown_words(question) == ["money"]
+
+
 def test_synonym_terms_count_as_known(retriever):
     # "WFH" never appears in the documents but we know how to translate it.
     assert retriever.unknown_words("Can I WFH?") == []

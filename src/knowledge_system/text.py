@@ -17,6 +17,10 @@ from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
 DOMAIN_STOP_WORDS = {
     "policy", "policies", "company", "nalits", "employee", "employees", "staff",
     "tell", "know", "want", "need", "does", "rule", "rules", "happen", "happens",
+    # Conversational filler. sklearn's list targets formal text, so without
+    # these "...and like if I..." counted "like" as an unknown topic word.
+    "like", "just", "really", "actually", "basically", "ok", "okay", "hi", "hello",
+    "thanks", "thank", "pls", "plz", "hey",
     # Fragments left after splitting contractions ("don't" -> "don").
     "don", "doesn", "didn", "isn", "aren", "won", "ve", "ll", "re",
 }

@@ -98,7 +98,7 @@ curl -X POST http://127.0.0.1:5000/api/ask -H "Content-Type: application/json" -
 **Tests and evaluation**
 
 ```bash
-pytest                                         # 53 tests, ~3 seconds
+pytest                                         # 54 tests, ~3 seconds
 python -m knowledge_system.evaluate -v         # per-question results and score distributions
 ```
 
@@ -156,7 +156,7 @@ A confident answer without a real source is the most dangerous thing this tool c
 
 ## Testing and evaluation
 
-**What is tested, and why** (53 tests in [`tests/`](tests)):
+**What is tested, and why** (54 tests in [`tests/`](tests)):
 
 | File | What it protects |
 |---|---|
