@@ -57,6 +57,13 @@ class TfidfRetriever:
             SearchResult(self.sections[i], float(scores[i])) for i in ranked if scores[i] > 0
         ]
 
+    def similarity(self, question: str, texts: list[str]) -> list[float]:
+        """Score arbitrary texts (e.g. sentences) against a question in the same TF-IDF space."""
+        if not texts:
+            return []
+        query_vector = self.vectorizer.transform([expand_query(question)])
+        return linear_kernel(query_vector, self.vectorizer.transform(texts)).ravel().tolist()
+
     def content_words(self, question: str) -> list[str]:
         """Distinct content words in the question, one per stem ("day"/"days" count once)."""
         return list(self._words_by_stem(question).values())
