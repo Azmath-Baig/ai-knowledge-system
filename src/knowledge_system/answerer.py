@@ -156,13 +156,17 @@ class KnowledgeBase:
 
     def _extract(self, question: str, section: Section) -> str:
         """Return the most relevant sentence(s) of a section, in their original order."""
-        sentences = [s.strip() for s in _SENTENCE_END.split(section.text) if s.strip()]
+        sentences = split_sentences(section.text)
         scores = self.retriever.similarity(question, sentences)
         ranked = sorted(range(len(sentences)), key=lambda i: scores[i], reverse=True)
         chosen = [i for i in ranked[: config.MAX_ANSWER_SENTENCES] if scores[i] > 0]
         if not chosen:  # the match came from the heading; the opening sentence summarises it
             chosen = [0]
         return " ".join(sentences[i] for i in sorted(chosen))
+
+
+def split_sentences(text: str) -> list[str]:
+    return [s.strip() for s in _SENTENCE_END.split(text) if s.strip()]
 
 
 def _quote_list(words: list[str]) -> str:

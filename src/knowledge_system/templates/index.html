@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% if question %}{{ question }} · {% endif %}NALITS Knowledge Base</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main>
+    <header>
+      <h1>NALITS Knowledge Base</h1>
+      <p class="subtitle">Answers are quoted from {{ section_count }} sections of {{ documents|length }} policy documents, always with their source.</p>
+    </header>
+
+    <form method="get" action="/" role="search">
+      <label for="q" class="visually-hidden">Your question</label>
+      <input id="q" name="q" type="search" value="{{ question }}" maxlength="500"
+             placeholder="e.g. Can I work from home on Friday?" autocomplete="off" {% if not question %}autofocus{% endif %}>
+      <button type="submit">Ask</button>
+    </form>
+
+    {% if not answer %}
+      <section class="examples" aria-label="Example questions">
+        <p>Try one of these:</p>
+        <ul>
+          {% for example in examples %}
+            <li><a href="?q={{ example|urlencode }}">{{ example }}</a></li>
+          {% endfor %}
+        </ul>
+      </section>
+
+    {% elif answer.answered %}
+      <article class="card answer">
+        <div class="card-head">
+          <h2>Answer</h2>
+          <span class="badge {{ answer.confidence }}"
+                title="Based on how closely your question matches the source">{{ answer.confidence }} confidence</span>
+        </div>
+        <blockquote>{{ answer.text }}</blockquote>
+
+        {% for note in answer.notes %}
+          <p class="note">{{ note }}</p>
+        {% endfor %}
+
+        <h3>{{ "Source" if answer.sources|length == 1 else "Sources" }}</h3>
+        <ul class="sources">
+          {% for source in answer.sources %}
+            <li>
+              <details {% if loop.first %}open{% endif %}>
+                <summary>
+                  <span class="file">{{ source.file }}</span> — Section {{ source.section }}
+                  <span class="citation">{{ source.citation }} · match {{ "%.2f"|format(source.score) }}</span>
+                </summary>
+                <div class="section-text">{{ highlight(source.text, answer.text) }}</div>
+              </details>
+            </li>
+          {% endfor %}
+        </ul>
+      </article>
+
+    {% else %}
+      <article class="card {{ answer.status.value }}">
+        <h2>{{ "No answer found" if answer.status.value == "not_found" else "Please rephrase" }}</h2>
+        <p>{{ answer.text }}</p>
+        {% if answer.related %}
+          <h3>Closest sections <small>(these may not answer your question)</small></h3>
+          <ul class="sources">
+            {% for source in answer.related %}
+              <li>
+                <details>
+                  <summary><span class="file">{{ source.file }}</span> — {{ source.citation }}</summary>
+                  <div class="section-text">{{ highlight(source.text, "") }}</div>
+                </details>
+              </li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+      </article>
+    {% endif %}
+
+    <footer>
+      <p>Documents: {{ documents|join(", ") }}.</p>
+      <p>This tool only quotes the documents above. It does not generate answers, so if something isn't covered, it will say so.</p>
+    </footer>
+  </main>
+</body>
+</html>
