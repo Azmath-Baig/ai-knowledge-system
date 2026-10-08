@@ -1,0 +1,6 @@
+# Runtime
+scikit-learn>=1.3,<2   # TF-IDF vectoriser + cosine similarity
+flask>=3.0,<4          # minimal web UI + JSON API
+
+# Development
+pytest>=8,<10
