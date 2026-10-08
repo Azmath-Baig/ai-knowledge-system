@@ -81,6 +81,18 @@ def test_weak_match_with_no_clear_winner_is_declined(kb):
 
     assert answer.status is Status.NOT_FOUND
     assert "equally weakly" in answer.text
+    # The scattered matches (e.g. an expenses section mentioning "salary")
+    # are not offered as "closest sections".
+    assert answer.related == []
+
+
+def test_closest_sections_must_be_plausible_matches(kb):
+    # "dress code" -> Code of Conduct is worth offering; very weak matches are not.
+    answer = kb.ask("Is there a dress code?")
+
+    assert not answer.answered
+    assert [s.citation for s in answer.related] == ["Employee Policies — Section 1: Code of Conduct"]
+    assert all(s.score >= 0.18 for s in kb.ask("When is salary paid?").related)
 
 
 def test_unknown_word_in_otherwise_answerable_question_adds_caveat(kb):

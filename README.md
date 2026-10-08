@@ -98,7 +98,7 @@ curl -X POST http://127.0.0.1:5000/api/ask -H "Content-Type: application/json" -
 **Tests and evaluation**
 
 ```bash
-pytest                                         # 55 tests, ~3 seconds
+pytest                                         # 56 tests, ~3 seconds
 python -m knowledge_system.evaluate -v         # per-question results and score distributions
 ```
 
@@ -144,9 +144,9 @@ A confident answer without a real source is the most dangerous thing this tool c
 
 | Situation | Behaviour |
 |---|---|
-| Best match scores below `MIN_SCORE` (0.18) | **Not found.** Gives the reason, suggests contacting HR or the IT Service Desk, and lists the closest sections, clearly labelled as possibly irrelevant. |
+| Best match scores below `MIN_SCORE` (0.18) | **Not found.** Gives the reason, suggests contacting HR or the IT Service Desk, and lists the closest sections, clearly labelled as possibly irrelevant. Only sections that reach `MIN_SCORE` are listed: one that merely shares a word (e.g. "salary" in an expenses section) is noise. |
 | Half or more of the question's key words never appear in the knowledge base (e.g. *"paternity leave"* has one of two) | **Not found**, and names the missing word: *"The knowledge base doesn't mention 'paternity'."* |
-| Best match is weak (< 0.30) **and** a runner-up scores at least 80% of it | **Not found**: *"Several sections match your question about equally weakly."* No single section stands out, so the words in the question matched different sections. |
+| Best match is weak (< 0.30) **and** a runner-up scores at least 80% of it | **Not found**: *"Several sections match your question about equally weakly."* No single section stands out, so the words in the question matched different sections. No closest sections are listed, because they are scattered by definition. |
 | Matched, but weakly (score < 0.30) or with a word the knowledge base lacks | **Answered with low confidence** and a caveat, e.g. *"The knowledge base doesn't mention 'spain', so this answer may only cover part of your question."* |
 
 **Why the second rule exists.** It is the most important design decision here. My first version declined "maternity policy" correctly, but answered *"How much paternity leave do I get?"* with the **holiday carry-over** section. It scored 0.24, the same as many genuine answers, because the word "leave" matched strongly. A score threshold alone cannot catch this, because the partial match looks like a real one. Checking for **unknown words** catches it, and it also lets the reply explain *why* there's no answer, which is more useful than a bare "not found".
@@ -159,7 +159,7 @@ A confident answer without a real source is the most dangerous thing this tool c
 
 ## Testing and evaluation
 
-**What is tested, and why** (55 tests in [`tests/`](tests)):
+**What is tested, and why** (56 tests in [`tests/`](tests)):
 
 | File | What it protects |
 |---|---|

@@ -124,9 +124,11 @@ class KnowledgeBase:
         # "salary" -> Expenses, "annual leave" -> Holiday). Genuine weak answers
         # in the evaluation set stand clearly above their runner-up (<= 69%).
         if best.score < config.CONFIDENT_SCORE and close_runners_up:
+            # The matches are scattered by definition, so listing them as
+            # "closest sections" would contradict the reason we just gave.
             return self._not_found(
                 question,
-                results,
+                [],
                 "Several sections match your question about equally weakly, so none of them "
                 "clearly answers it.",
             )
@@ -158,6 +160,11 @@ class KnowledgeBase:
         )
 
     def _not_found(self, question: str, results: list[SearchResult], reason: str) -> Answer:
+        """Decline, offering only closest sections that are at least a plausible match.
+
+        Showing sections that merely share a word (e.g. "salary" in an expenses
+        section) adds noise and erodes trust, so they must reach MIN_SCORE.
+        """
         text = (
             "I couldn't find an answer to this in the knowledge base. "
             f"{reason} Please contact {config.FALLBACK_CONTACT}."
@@ -166,7 +173,7 @@ class KnowledgeBase:
             question,
             Status.NOT_FOUND,
             text,
-            related=[Source.from_result(r) for r in results],
+            related=[Source.from_result(r) for r in results if r.score >= config.MIN_SCORE],
         )
 
     def _extract(self, question: str, section: Section) -> str:
