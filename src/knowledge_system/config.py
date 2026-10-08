@@ -21,7 +21,10 @@ CONFIDENT_SCORE = 0.30
 # Decline when at least this fraction of the question's content words are
 # absent from the knowledge base (e.g. "paternity leave" -> 1 of 2 unknown).
 MAX_UNKNOWN_RATIO = 0.5
-# Another section is also cited if it scores within this fraction of the best.
+# A runner-up scoring at least this fraction of the best is "close". With a
+# strong best match it is cited too; with a weak one, there is no clear winner
+# and the question is declined. Correct weak answers in the evaluation set had
+# runners-up at <= 69% of the best; the failures found had them at >= 89%.
 RELATED_SCORE_RATIO = 0.8
 
 TOP_K = 3

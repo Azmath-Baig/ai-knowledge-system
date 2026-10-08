@@ -60,7 +60,7 @@ Closest sections (these may not answer your question):
 - **Honest refusals.** Questions the documents don't cover are declined. The reply gives the reason, suggests who to contact and lists the closest sections.
 - **Confidence labels and caveats.** Weak matches are marked *low confidence*, and any words in the question that the knowledge base doesn't contain are pointed out.
 - **Three interfaces over the same core:** a CLI (one-shot, interactive and `--json`), a minimal web page, and a JSON API.
-- **An evaluation set of 46 labelled questions** and a regression test that fails the build if search quality drops or an out-of-scope question gets answered.
+- **An evaluation set of 47 labelled questions** and a regression test that fails the build if search quality drops or an out-of-scope question gets answered.
 
 ## Install and run
 
@@ -98,7 +98,7 @@ curl -X POST http://127.0.0.1:5000/api/ask -H "Content-Type: application/json" -
 **Tests and evaluation**
 
 ```bash
-pytest                                         # 54 tests, ~3 seconds
+pytest                                         # 55 tests, ~3 seconds
 python -m knowledge_system.evaluate -v         # per-question results and score distributions
 ```
 
@@ -140,23 +140,26 @@ question ──► text.py: lower-case, remove stop words, stem, add synonyms ("
 
 ## Questions it cannot answer
 
-A confident answer without a real source is the most dangerous thing this tool could produce. When unsure, it **declines rather than guesses**, but it still tries to help. There are three outcomes:
+A confident answer without a real source is the most dangerous thing this tool could produce. When unsure, it **declines rather than guesses**, but it still tries to help:
 
 | Situation | Behaviour |
 |---|---|
 | Best match scores below `MIN_SCORE` (0.18) | **Not found.** Gives the reason, suggests contacting HR or the IT Service Desk, and lists the closest sections, clearly labelled as possibly irrelevant. |
 | Half or more of the question's key words never appear in the knowledge base (e.g. *"paternity leave"* has one of two) | **Not found**, and names the missing word: *"The knowledge base doesn't mention 'paternity'."* |
+| Best match is weak (< 0.30) **and** a runner-up scores at least 80% of it | **Not found**: *"Several sections match your question about equally weakly."* No single section stands out, so the words in the question matched different sections. |
 | Matched, but weakly (score < 0.30) or with a word the knowledge base lacks | **Answered with low confidence** and a caveat, e.g. *"The knowledge base doesn't mention 'spain', so this answer may only cover part of your question."* |
 
 **Why the second rule exists.** It is the most important design decision here. My first version declined "maternity policy" correctly, but answered *"How much paternity leave do I get?"* with the **holiday carry-over** section. It scored 0.24, the same as many genuine answers, because the word "leave" matched strongly. A score threshold alone cannot catch this, because the partial match looks like a real one. Checking for **unknown words** catches it, and it also lets the reply explain *why* there's no answer, which is more useful than a bare "not found".
 
-**Why answer the third case at all.** Declining everything uncertain would turn reasonable questions into dead ends. Showing the answer with a visible warning and the highlighted source lets the employee judge for themselves.
+**Why the "no clear winner" rule exists.** I found this one while testing the tool by hand. *"If I don't take my annual leave and come to work, will I get my monthly salary and leave salary both?"* was answered (low confidence) with the *Booking Leave* section, which says nothing about pay. Every word in the question exists somewhere in the documents, so the unknown-word rule didn't fire. But "salary" matched Expenses and "annual leave" matched Holiday Policy, and three sections from two documents scored about the same (0.18, 0.16, 0.16). In the evaluation set, genuine weak-but-correct answers always stood clearly above their runner-up (at most 69%), so "weak *and* no clear winner" is a reliable sign that nothing actually matched. It reuses the existing 80% "close runner-up" setting rather than adding a new number.
+
+**Why answer the last case at all.** Declining everything uncertain would turn reasonable questions into dead ends. Showing the answer with a visible warning and the highlighted source lets the employee judge for themselves.
 
 **How the threshold was chosen.** From the evaluation set, not by guessing. Every correctly answered question scored at least 0.196. Out-of-scope questions that got past the unknown-word check scored at most 0.140. `MIN_SCORE = 0.18` sits in that gap. All thresholds are in [`config.py`](src/knowledge_system/config.py), with this reasoning.
 
 ## Testing and evaluation
 
-**What is tested, and why** (54 tests in [`tests/`](tests)):
+**What is tested, and why** (55 tests in [`tests/`](tests)):
 
 | File | What it protects |
 |---|---|
@@ -166,7 +169,7 @@ A confident answer without a real source is the most dangerous thing this tool c
 | `test_cli.py`, `test_web.py` | The interfaces show what the core returns. The source is always visible. User input is HTML-escaped (XSS). The API rejects bad input. A missing data folder gives a clear error rather than a traceback. |
 | `test_evaluation.py` | A **quality gate** over the whole labelled set: fails if any out-of-scope question is answered, or if accuracy drops below its bar. This catches a tweak to synonyms or thresholds that quietly makes things worse. |
 
-**Evaluation results** (`python -m knowledge_system.evaluate`). These use 46 paraphrased questions in [`eval/questions.json`](eval/questions.json): 34 answerable and 12 out of scope.
+**Evaluation results** (`python -m knowledge_system.evaluate`). These use 47 paraphrased questions in [`eval/questions.json`](eval/questions.json): 34 answerable and 13 out of scope.
 
 ```text
 Answerable questions:   34
@@ -175,8 +178,8 @@ Answerable questions:   34
   Correct answers:      88% (30)
   Wrong section cited:  1
   Wrongly declined:     3
-Unanswerable questions: 12
-  Correctly declined:   100% (12)
+Unanswerable questions: 13
+  Correctly declined:   100% (13)
   Answered anyway:      0
 ```
 
@@ -235,7 +238,7 @@ Why it's laid out this way:
 - **Vocabulary mismatch.** TF-IDF matches words, not meaning. It doesn't know "dinner" is a meal or that Spain is "another country". The synonym table only covers terms I anticipated. This is the main weakness, and it causes all the evaluation failures.
 - **Multi-part questions** ("How much leave do I get and can I carry it over?") get the single best section. A second section is cited only when it scores almost as well.
 - **Extractive answers can be clunky**, or miss a qualifying sentence elsewhere in the section. That's why the full section is one click away, with the quoted sentences highlighted.
-- **Thresholds are tuned on 46 questions I wrote myself.** Real employees will phrase things differently.
+- **Thresholds are tuned on 47 questions I wrote myself.** Real employees will phrase things differently.
 - **Typos** are treated as unknown words. "anual leave" is declined with *"doesn't mention 'anual'"*, which is at least transparent.
 - **No conversation memory.** Each question stands alone, so "What about part-time staff?" won't work as a follow-up.
 - **Not built for scale or security:** no authentication, the index is rebuilt on every start, and Flask's development server is used.

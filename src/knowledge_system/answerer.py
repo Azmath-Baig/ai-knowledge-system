@@ -115,6 +115,22 @@ class KnowledgeBase:
             )
 
         best = results[0]
+        close_runners_up = [
+            r for r in results[1:] if r.score >= best.score * config.RELATED_SCORE_RATIO
+        ]
+
+        # A weak best match with an equally weak runner-up means no section
+        # really matched: each question word hit a different section (e.g.
+        # "salary" -> Expenses, "annual leave" -> Holiday). Genuine weak answers
+        # in the evaluation set stand clearly above their runner-up (<= 69%).
+        if best.score < config.CONFIDENT_SCORE and close_runners_up:
+            return self._not_found(
+                question,
+                results,
+                "Several sections match your question about equally weakly, so none of them "
+                "clearly answers it.",
+            )
+
         notes = []
         if unknown:
             notes.append(
@@ -125,12 +141,11 @@ class KnowledgeBase:
         if confidence == "low":
             notes.append("This is a weak match. Please check the source before relying on it.")
 
-        # Cite other sections that score almost as well, rather than silently
-        # picking one when the knowledge base is genuinely split.
-        sources = [best] + [
-            r for r in results[1:] if r.score >= best.score * config.RELATED_SCORE_RATIO
-        ]
-        if len(sources) > 1:
+        # A strong match with a close runner-up means the knowledge base is
+        # genuinely split (e.g. two expenses sections), so cite both rather
+        # than silently picking one.
+        sources = [best, *close_runners_up]
+        if close_runners_up:
             notes.append("More than one section looks relevant, so all of them are listed as sources.")
 
         return Answer(

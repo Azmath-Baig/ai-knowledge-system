@@ -47,6 +47,7 @@
     {"question": "What is the company car policy?", "expected": null},
     {"question": "How do I book a meeting room?", "expected": null},
     {"question": "What health insurance do we have?", "expected": null},
-    {"question": "What's the weather like today?", "expected": null}
+    {"question": "What's the weather like today?", "expected": null},
+    {"question": "If I don't take my annual leave and come to work, will I get my monthly salary and leave salary both?", "expected": null}
   ]
 }

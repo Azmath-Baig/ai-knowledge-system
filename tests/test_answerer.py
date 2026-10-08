@@ -70,6 +70,19 @@ def test_partial_match_on_generic_word_is_not_answered(kb):
     assert answer.related, "closest sections are offered so the user can browse"
 
 
+def test_weak_match_with_no_clear_winner_is_declined(kb):
+    # Found by manual testing: every word is in the knowledge base, but in
+    # different sections ("salary" -> Expenses, "annual leave" -> Holiday),
+    # so three unrelated sections scored about equally low.
+    answer = kb.ask(
+        "if i don't take my annual leave and come to work will i get my "
+        "monthly salary and leave salary both or what?"
+    )
+
+    assert answer.status is Status.NOT_FOUND
+    assert "equally weakly" in answer.text
+
+
 def test_unknown_word_in_otherwise_answerable_question_adds_caveat(kb):
     answer = kb.ask("Can I work remotely from Spain on Fridays?")
 
