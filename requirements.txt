@@ -1,5 +1,6 @@
 # Runtime
 scikit-learn>=1.3,<2   # TF-IDF vectoriser + cosine similarity
+snowballstemmer>=2.2,<4  # tiny pure-Python stemmer ("carrying" -> "carri")
 flask>=3.0,<4          # minimal web UI + JSON API
 
 # Development
