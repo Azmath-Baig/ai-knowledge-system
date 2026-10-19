@@ -44,11 +44,12 @@ Closest sections (these may not answer your question):
 4. [Key decisions and trade-offs](#key-decisions-and-trade-offs)
 5. [Questions it cannot answer](#questions-it-cannot-answer)
 6. [Testing and evaluation](#testing-and-evaluation)
-7. [Project structure](#project-structure)
-8. [Assumptions](#assumptions)
-9. [Limitations](#limitations)
-10. [What I would improve with more time](#what-i-would-improve-with-more-time)
-11. [Final question: two weeks to production](#final-question-two-weeks-to-production-for-1000-employees)
+7. [Would embeddings help? (experiment)](#would-embeddings-help-experiment)
+8. [Project structure](#project-structure)
+9. [Assumptions](#assumptions)
+10. [Limitations](#limitations)
+11. [What I would improve with more time](#what-i-would-improve-with-more-time)
+12. [Final question: two weeks to production](#final-question-two-weeks-to-production-for-1000-employees)
 
 ---
 
@@ -130,11 +131,11 @@ question ──► text.py: lower-case, remove stop words, stem, add synonyms ("
 
 | Decision | What I chose | Why | What I didn't choose, and why |
 |---|---|---|---|
-| Search method | **TF-IDF + cosine similarity** (scikit-learn) | Small corpus. Fast, deterministic and offline, with no API key or model download. Scores fall between 0 and 1, so the "I don't know" cut-off is easy to reason about and tune. I can explain every number it produces. | **BM25** usually ranks slightly better, but its scores have no fixed range, which makes a refusal threshold harder to set. **Embeddings** handle synonyms far better (see [Limitations](#limitations)), but they add a large model dependency and are harder to debug at this size. |
+| Search method | **TF-IDF + cosine similarity** (scikit-learn) | Small corpus. Fast, deterministic and offline, with no API key or model download. Scores fall between 0 and 1, so the "I don't know" cut-off is easy to reason about and tune. I can explain every number it produces. | **BM25** usually ranks slightly better, but its scores have no fixed range, which makes a refusal threshold harder to set. **Embeddings** were tested ([experiment](#would-embeddings-help-experiment)): they improve ranking, but their scores can't separate answerable from out-of-scope questions, and they didn't increase correct answers here. |
 | Answer generation | **Extractive** (verbatim sentences) | Cannot hallucinate, and every word can be traced to a source. For HR policy, a correct quote matters more than a fluent paraphrase. | **LLM-generated answers** read better but can invent or blend facts, need an API key, cost money per question, and make tests non-deterministic. I would add one only as an optional layer restricted to the retrieved text (see [improvements](#what-i-would-improve-with-more-time)). |
 | Chunking | **One chunk per `##` section** | Matches how the authors organised the content, and gives a meaningful citation ("Section 2: Remote Working"). | **Fixed-size chunks** cut sentences in half and turn citations into "characters 1,200–1,700". |
 | Stemming | **Snowball stemmer** | Tiny, pure Python, rule-based. I tried simple plural stripping first, but it missed "-ing" and "-ed" forms ("carry over holiday" was wrongly refused). | **Lemmatisation** (spaCy/NLTK) is more accurate, but needs a much larger dependency and downloaded models. |
-| Synonyms | **Small hand-written table** | Fixes the most common informal terms (WFH, PTO, reimburse) cheaply and transparently. | Embeddings solve this generally. The table is a deliberate stop-gap and is documented as one. |
+| Synonyms | **Small hand-written table** | Fixes the most common informal terms (WFH, PTO, reimburse) cheaply and transparently. | Embeddings handle this more generally for ranking (see the experiment), but don't fix the refusal rules. The table is a deliberate stop-gap and is documented as one. |
 | UI | **Server-rendered Flask page with no JavaScript** | The brief says a fancy UI isn't needed. The UI is a thin layer, and all behaviour lives in the tested core. It uses GET `?q=` URLs, so answers can be shared as links. | **Streamlit** is quicker to build but pulls in a heavy dependency stack and hides the HTTP layer. **React** would be overkill. |
 | Frameworks | **No LangChain or vector database** | The core search-and-answer logic is about 350 lines of plain Python that I can explain line by line. | These are useful at scale, but here they would hide the decisions the brief asks me to explain. |
 
@@ -194,6 +195,40 @@ Three of the four are declined rather than answered wrongly, which is the safe w
 
 *Caveat:* this set is small and was also used to tune the thresholds, so the numbers are optimistic. A separate held-out set built from real employee questions is the first thing I'd add (see below).
 
+## Would embeddings help? (experiment)
+
+Every remaining failure is a vocabulary mismatch, which is exactly what embeddings are meant to fix. So I tested them instead of assuming. [`experiments/compare_embeddings.py`](experiments/compare_embeddings.py) runs the evaluation set against three embedding models, none of which need PyTorch:
+
+```bash
+pip install -r experiments/requirements.txt
+python experiments/compare_embeddings.py
+```
+
+**1. Ranking: is the right section ranked first? (34 answerable questions)**
+
+| Model | TF-IDF only | 30% embeddings | 50% embeddings | Embeddings only |
+|---|---|---|---|---|
+| potion-base-8M (static, 30 MB) | 91% | 88% | 88% | 82% |
+| potion-retrieval-32M (static) | 91% | 94% | 94% | 91% |
+| bge-small-en-v1.5 (transformer, 130 MB) | 91% | 94% | **97%** | 94% |
+
+The small model is *worse* than TF-IDF; for example, it sends "Can I work from home on Friday?" to IT Support. A proper transformer model mixed 50/50 with TF-IDF ranks best.
+
+**2. Refusals: can embedding scores tell answerable from out-of-scope?** No. With bge-small, the correct section scores **0.53–0.86**, and the best match for out-of-scope questions scores **0.48–0.72**. The ranges overlap almost completely: "When is salary paid?" (not covered) outscores many real answers. An embedding score therefore can't decide *whether* to answer. This is why the refusal rules stay on TF-IDF evidence and the unknown-word check.
+
+**3. End to end: embeddings re-rank TF-IDF's candidates, TF-IDF still decides refusals.**
+
+| | TF-IDF only | Hybrid re-ranking |
+|---|---|---|
+| Right section ranked first | 91% | 97% |
+| **Correct answers** | **88% (30)** | **88% (30)** |
+| Wrong section cited | 1 | 0 |
+| Out-of-scope answered anyway | 0 | 0 |
+
+**Decision: keep TF-IDF as the default.** Better ranking didn't produce more correct answers. The remaining failures ("dinner", "mileage", "buddy") are declined by the *safety rules*, not ranked badly. Answering them would mean trusting embedding scores in the refusal decision, and part 2 shows that would risk confident wrong answers. The one real gain (a wrong citation becomes a refusal) doesn't justify about 100 MB of extra dependencies, a 130 MB model download and slower start-up. I set the bar before running the experiment: *keep it only if correct answers go up while "answered anyway" stays at 0*. It didn't meet it.
+
+**When this would change:** with a much larger knowledge base, or real questions that show ranking (not refusal) as the bottleneck, I'd adopt the hybrid re-ranking as tested here. TF-IDF would keep deciding refusals.
+
 ## Project structure
 
 ```text
@@ -204,6 +239,7 @@ ai-knowledge-system/
 ├── pyproject.toml              package metadata, `kb` command, pytest config
 ├── data/                       the knowledge base (synthetic, see data/README.md)
 ├── eval/questions.json         labelled questions: expected section, or null = should decline
+├── experiments/                embeddings experiment (optional, own requirements.txt)
 ├── src/knowledge_system/
 │   ├── loader.py               Markdown → Section objects (the unit of citation)
 │   ├── text.py                 tokenising, stop words, stemming, synonyms (shared by index and query)
@@ -235,7 +271,7 @@ Why it's laid out this way:
 
 ## Limitations
 
-- **Vocabulary mismatch.** TF-IDF matches words, not meaning. It doesn't know "dinner" is a meal or that Spain is "another country". The synonym table only covers terms I anticipated. This is the main weakness, and it causes all the evaluation failures.
+- **Vocabulary mismatch.** TF-IDF matches words, not meaning. It doesn't know "dinner" is a meal or that Spain is "another country". The synonym table only covers terms I anticipated. This is the main weakness, and it causes all the evaluation failures. Embeddings improve the *ranking* but [don't fix this end to end](#would-embeddings-help-experiment), because the refusal rules still rely on shared words.
 - **Multi-part questions** ("How much leave do I get and can I carry it over?") get the single best section. A second section is cited only when it scores almost as well.
 - **Extractive answers can be clunky**, or miss a qualifying sentence elsewhere in the section. That's why the full section is one click away, with the quoted sentences highlighted.
 - **Thresholds are tuned on 47 questions I wrote myself.** Real employees will phrase things differently.
@@ -245,7 +281,7 @@ Why it's laid out this way:
 
 ## What I would improve with more time
 
-1. **Hybrid search.** Add sentence embeddings (e.g. `all-MiniLM-L6-v2`) alongside TF-IDF and combine the rankings. This targets every current evaluation failure without giving up exact matching on terms like "VPN" or "45p".
+1. **Meaning-aware refusal decisions.** The experiment showed embeddings rank well but can't decide refusals alone. The next step is a small classifier that combines both signals (TF-IDF score, embedding score, unknown-word ratio, margin over the runner-up), trained on a larger labelled set. That would let "dinner" be answered without letting "salary" through.
 2. **A bigger, held-out evaluation set** from real employee questions, used to compare search methods and re-tune thresholds without fooling myself.
 3. **Optional LLM answer layer**, only once the evaluation shows that extractive answers are a real problem. It would be strictly limited to the retrieved sections, required to cite them, and checked automatically (does every claim map to a cited sentence?). Refusal logic would stay in plain code, not in the prompt.
 4. **Spelling correction** against the corpus vocabulary, before the unknown-word check.
@@ -264,7 +300,7 @@ A tool that quotes an out-of-date expenses limit is worse than no tool, because 
 Employees will type sensitive things ("I'm off sick with depression, what do I do?"). So: single sign-on, documents filtered by the user's permissions (manager-only guidance must not leak), and a deliberate logging policy. Log question text only with retention limits and no personal identifiers, and involve the data protection lead (GDPR). This has to be right before launch, not after.
 
 **3. Measure quality on real questions, then improve search.**
-Run a pilot with one department, collect real questions and label a held-out set. Then add hybrid search (embeddings plus keywords), which this prototype's evaluation already points to. Every change gets measured against the set in CI, with the "never answer an out-of-scope question" bar kept as a hard gate. I would *not* add an LLM until the data shows extractive answers are failing users.
+Run a pilot with one department, collect real questions and label a held-out set. Then revisit hybrid search with that data. My experiment showed embeddings improve ranking but can't decide refusals on their own, so I'd adopt them only alongside a refusal decision tuned on real questions. Every change gets measured against the set in CI, with the "never answer an out-of-scope question" bar kept as a hard gate. I would *not* add an LLM until the data shows extractive answers are failing users.
 
 **4. A feedback loop and content-gap reporting.**
 Add a "Was this helpful?" button on every answer, plus a weekly report for HR of declined and low-confidence questions. This turns the tool from a static search box into a way of discovering which policies are missing or unclear. The maternity-policy question is *useful information* for HR, not just a failure.

@@ -1,0 +1,4 @@
+# Only needed for experiments/compare_embeddings.py, not for the application.
+-r ../requirements.txt
+model2vec>=0.4     # static embeddings (numpy only)
+fastembed>=0.4     # ONNX transformer embeddings (no PyTorch)
