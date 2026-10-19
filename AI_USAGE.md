@@ -11,9 +11,9 @@
 | Understanding the brief | Claude read the challenge repository, summarised the requirements and how they'd be judged, and pointed out that **no knowledge-base documents were supplied**. | Asked for the reasoning behind every choice, so I could explain it in an interview, not just submit it. |
 | Finding data | I asked Claude to look for public HR/handbook datasets (Kaggle, Hugging Face, open-source handbooks on GitHub). | Decided to use **synthetic documents** instead: none of the public sets matched the brief's topics, and writing our own gave a known correct answer for every evaluation question. |
 | Choosing the approach | Claude proposed TF-IDF with extractive answers and explained the alternatives (BM25, embeddings, LLMs, LangChain). | Asked for a simple web UI on top of the CLI, but only after the core requirements (sources, refusals, tests) were done properly. |
-| Writing code and tests | Claude wrote the modules and tests step by step, one commit per step. | <!-- TODO: what you reviewed, ran or changed yourself --> |
+| Writing code and tests | Claude wrote the modules and tests step by step, one commit per step. | Ran the CLI and web UI myself and tried my own questions, including messy, multi-part ones. Three of the problems this found were fixed, each with a test (see section 4). |
 | Evaluation | Claude built the labelled question set and the evaluation script. | Used the results to choose thresholds, and to decide which failures to fix and which to document. |
-| Documentation | Claude drafted the README and this file. | <!-- TODO: what you edited or rewrote --> |
+| Documentation | Claude drafted the README and this file. | Asked for every decision to be written down with its reason and the alternatives rejected, so the README doubles as my interview preparation. |
 
 ## 3. Examples where AI output was changed, rejected or improved
 
@@ -43,13 +43,18 @@
 
 ## 4. My own reflection
 
-<!--
-TODO (Azmath): write this section yourself, in your own words. The reviewers
-want YOUR thinking here, not AI-written text. Some prompts:
+*Drafted with Claude from this project's working session, then checked by me against what actually happened. Everything below is something I did, not a general claim.*
 
-- Which of the decisions above did you push back on or question, and why?
-- What did you learn (e.g. how TF-IDF / cosine similarity / stemming work)?
-- Where did you NOT trust the AI and verify it yourself (e.g. running the
-  evaluation, reading the code, checking a claim in the README)?
-- What would you do differently next time when working with an AI tool?
--->
+**Testing it myself found problems the automated tests didn't.** After the build, all tests passed and the evaluation looked good. I then used the tool the way a real employee would, with long, informal and multi-part questions, and found three issues:
+
+1. *"what are the leave policy and like if i don't take my annual leave will i get that money as extra?"* was declined with the message *"doesn't mention 'like'"*. The word "like" was being treated as a topic. **Fix:** conversational filler words are now ignored.
+2. *"if i don't take my annual leave and come to work will i get my monthly salary and leave salary both or what?"* was **answered** (low confidence) with the *Booking Leave* section, which says nothing about pay. Every word existed in the documents, just in unrelated sections. **Fix:** a weak match with no clear winner is now declined. This was the most important find, because it was a confident-looking answer to a question the documents don't cover.
+3. After that fix, the "closest sections" list still showed an expenses section only because it contained the word "salary". I pointed out that this wasn't related to my question. **Fix:** closest sections must now be plausible matches.
+
+Each fix has a test with my original question in it, and the second one was added to the evaluation set. The lesson for me is that a passing test suite only proves the cases someone thought of; real questions are messier.
+
+**I questioned the AI's choices instead of accepting them.** When Claude said embeddings were left out, I asked *why not*. Rather than accepting the explanation, we agreed a bar in advance (more correct answers, and zero out-of-scope questions answered) and measured three models. Embeddings improved ranking but didn't meet the bar, so they were documented but not added. I'd rather explain a measured decision than an assumed one.
+
+**I kept the scope deliberate.** I asked for a simple UI, but only on top of a core that meets every requirement (sources, refusals, tests), not a polished interface over a weak core. I also asked for the reasoning behind each choice, so I can explain the code rather than just submit it.
+
+**What I'd do differently next time:** test it by hand much earlier. All three of my findings would have been cheaper to fix if I had tried real questions before the evaluation set was written.
